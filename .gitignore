@@ -2,6 +2,11 @@
 .godot/
 /android/
 
+# 导出产物（体积大，不入库）
+/release/
+/export/*.exe
+*.pck
+
 # 操作系统杂项
 .DS_Store
 Thumbs.db
