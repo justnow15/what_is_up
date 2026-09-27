@@ -216,7 +216,7 @@ func _try_spawn_enemy()->bool:
 		return false
 	var enemy_instance:=enemy_scene.instantiate() as Enemy
 	if enemy_instance==null:
-		push_warning("initial failed")
+		push_warning("enemy instantiate failed")
 		return false
 	enemy_container.add_child(enemy_instance)
 	enemy_instance.global_position=spawn_point.global_position

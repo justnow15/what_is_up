@@ -25,9 +25,6 @@ radius = 8.0
 [node name="Enemy" type="CharacterBody2D" unique_id=116773147]
 collision_layer = 4
 script = ExtResource("1_dregr")
-touch_damage = null
-touch_damage_interval = null
-hurt_blink_duration = null
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=1134829777]
 shape = SubResource("CircleShape2D_ta25w")
