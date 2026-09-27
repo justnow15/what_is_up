@@ -8,7 +8,7 @@
 
 [resource]
 script = ExtResource("1_wpnm2")
-move_speed = 40.0
+move_speed = 28.0
 collision_radius = 6.0
 enemy_frames = ExtResource("1_3qsgj")
 pickup_drop_chance = 0.2

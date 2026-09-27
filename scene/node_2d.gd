@@ -24,6 +24,12 @@ const RESULT_OK_BUTTON_TEXT:="结束游戏"
 @export_range(1,200,1,"or_greater") var max_alive_enemies:int =12
 @export_group("关卡ui")
 @export_range(1.0,3600.0,1.0,"or_greater") var stage_duration:float=60.0
+@export_group("音频")
+@export var background_music:AudioStream=preload("res://audio/1-27 Journey of the Prairie King (Overworld).mp3")
+@export var win_sound:AudioStream=preload("res://audio/Cowboy_Secret.wav")
+@export var lose_sound:AudioStream=preload("res://audio/cowboy_dead.wav")
+@export_range(-40.0,10.0,1.0) var music_volume_db:float=-6.0
+@export_range(-40.0,10.0,1.0) var sound_volume_db:float=0.0
 
 
 
@@ -34,6 +40,9 @@ const RESULT_OK_BUTTON_TEXT:="结束游戏"
 @onready var life_count_label:Label=$HUDlayer/LifeCountLabel
 @onready var timer_bar:Sprite2D=$HUDlayer/TimerBar
 @onready var result_dialog:AcceptDialog=$AcceptDialog
+@onready var music_player:AudioStreamPlayer=$MusicPlayer
+@onready var win_sound_player:AudioStreamPlayer=$WinSoundPlayer
+@onready var lose_sound_player:AudioStreamPlayer=$LoseSoundPlayer
 var random_generator:RandomNumberGenerator=RandomNumberGenerator.new()
 var enemy_spawn_points:Array[Marker2D]=[]
 var available_enemy_configs:Array[EnemyConfig]=[]
@@ -47,6 +56,8 @@ var arena_center:Vector2=Vector2.ZERO
 func _ready() -> void:
 	random_generator.randomize()
 	_configure_result_dialog()
+	_configure_audio()
+	_start_background_music()
 	_setup_hub()
 	_calc_arena_center()
 	_collect_enemy_spawn_points()
@@ -82,6 +93,40 @@ func _configure_result_dialog()->void:
 		result_dialog.close_requested.connect(_on_result_dialog_exit_requested)
 	if not result_dialog.canceled.is_connected(_on_result_dialog_exit_requested):
 		result_dialog.canceled.connect(_on_result_dialog_exit_requested)
+
+func _configure_audio()->void:
+	music_player.volume_db=music_volume_db
+	win_sound_player.volume_db=sound_volume_db
+	lose_sound_player.volume_db=sound_volume_db
+	# 结算时游戏是暂停状态，音效播放器必须设置为「始终处理」才能出声
+	win_sound_player.process_mode=Node.PROCESS_MODE_ALWAYS
+	lose_sound_player.process_mode=Node.PROCESS_MODE_ALWAYS
+
+func _start_background_music()->void:
+	if background_music==null:
+		return
+	_set_stream_looping(background_music)
+	music_player.stream=background_music
+	music_player.play()
+
+func _set_stream_looping(stream:AudioStream)->void:
+	var mp3_stream:=stream as AudioStreamMP3
+	if mp3_stream!=null:
+		mp3_stream.loop=true
+		return
+	var wav_stream:=stream as AudioStreamWAV
+	if wav_stream!=null:
+		wav_stream.loop_mode=AudioStreamWAV.LOOP_FORWARD
+
+func _stop_background_music()->void:
+	if music_player.playing:
+		music_player.stop()
+
+func _play_sound(sound_player:AudioStreamPlayer,stream:AudioStream)->void:
+	if sound_player==null or stream==null:
+		return
+	sound_player.stream=stream
+	sound_player.play()
 
 func _setup_hub()->void:
 	stage_time_left=maxf(stage_duration,0.0)
@@ -129,11 +174,14 @@ func _show_result_dialog(result_title:String,result_message:String)->void:
 		ok_button.grab_focus()
 func _check_game_result()->void:
 	if stage_time_left<=0.0:
+		_play_sound(win_sound_player,win_sound)
 		_show_result_dialog(RESULT_TITLE_WIN,RESULT_MESSAGE_WIN)
 		return
 	if _get_player_current_health()<=0:
+		_play_sound(lose_sound_player,lose_sound)
 		_show_result_dialog(RESULT_TILTLE_LOSE,RESULT_MESSAGE_LOSE)
 func _stop_world()->void:
+	_stop_background_music()
 	enemy_spawn_timer.stop()
 	Engine.time_scale=0.0
 	get_tree().paused=true
