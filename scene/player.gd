@@ -4,7 +4,7 @@ class_name Player
 signal died
 
 const BULLET_SCENE:=preload("res://scene/Bullet.tscn")
-const ARMED_ANIMATION_PREFIX:=&"armed"
+const ARMED_ANIMATION_PREFIX:=&"armed_"
 const DEFAULT_MOVE_SPEED_MULTIPLIER:=1.0
 const DEFAULT_FIRE_RATE_MULTIPLIER:=1.0
 const  SPIRAL_PHASE_STEP:=PI/12
@@ -114,9 +114,9 @@ func _update_invulnerability(delta:float)->void:
 func _die()->void:
 	died.emit()
 	queue_free()
-	
-func _get_effective_move_interval()->float:
-	return maxf(fire_interval/ _get_effective_fire_rate_multiplier(),0.01)
+
+func get_current_health()->int:
+	return int(health)
 
 func _refresh_shooting_timer_wait_time()->void:
 	var new_interval:=_get_effective_fire_interval()
@@ -152,7 +152,7 @@ func _vector_to_facing_suffix(dir: Vector2)->StringName:
 	return &"down" if dir.y>0 else &"up"
 
 func _update_animation() -> void:
-	var animation_name:=StringName("%s%s"%[NORMAL_ANIMATION_PREFIX,facing_suffix])
+	var animation_name:=StringName("%s%s"%[_get_animation_prefix(),facing_suffix])
 	
 	if not body_sprite.sprite_frames.has_animation(animation_name):
 		push_warning("missing animation name")

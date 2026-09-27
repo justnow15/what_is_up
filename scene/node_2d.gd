@@ -1,5 +1,10 @@
 extends Node2D
 
+const RESULT_TITLE_WIN:="你赢了"
+const RESULT_TILTLE_LOSE:="你输了"
+const RESULT_MESSAGE_WIN:="你成功坚持到了最后"
+const  RESULT_MESSAGE_LOSE:="玩家生命值已经归零"
+const RESULT_OK_BUTTON_TEXT:="结束游戏"
 
 # Called when the node enters the scene tree for the first time.
 @export_group("刷怪资源")
@@ -17,21 +22,32 @@ extends Node2D
 @export_range(0.1,60.0,0.1,"or_greater") var spawn_interval:float=1.5
 @export_range(0.1,60.0,0.1,"or_greater") var min_spawn_interval:float=0.6
 @export_range(1,200,1,"or_greater") var max_alive_enemies:int =12
-@export_range(1.0,3600.0,1.0,"or_greater") var spawn_acceleration_duration:float=60.0
+@export_group("关卡ui")
+@export_range(1.0,3600.0,1.0,"or_greater") var stage_duration:float=60.0
+
 
 
 @onready var player:Player=$Player
 @onready var enemy_container:Node2D=$EnemyContainer
 @onready var enemy_spawn_points_root:Node2D=$EenmySpawnPoints
 @onready var enemy_spawn_timer:Timer=$EnemySpawnTimer
+@onready var life_count_label:Label=$HUDlayer/LifeCountLabel
+@onready var timer_bar:Sprite2D=$HUDlayer/TimerBar
+@onready var result_dialog:AcceptDialog=$AcceptDialog
 var random_generator:RandomNumberGenerator=RandomNumberGenerator.new()
 var enemy_spawn_points:Array[Marker2D]=[]
 var available_enemy_configs:Array[EnemyConfig]=[]
-var game_time_elapsed:float=0.0
+var stage_time_left:float=0.0
+var time_bar_full_scale_x:float=1.0
+var time_bar_left_edge_x:float=0.0
+var time_bar_left_texture_width:float=0.0
+var is_result_display:bool=false
 var arena_center:Vector2=Vector2.ZERO
 
 func _ready() -> void:
 	random_generator.randomize()
+	_configure_result_dialog()
+	_setup_hub()
 	_calc_arena_center()
 	_collect_enemy_spawn_points()
 	_collect_enemy_configs()
@@ -47,10 +63,87 @@ func _calc_arena_center()->void:
 	arena_center=tilemap_layer.map_to_local(tilemap_layer.get_used_rect().get_center())
 
 func _process(delta: float) -> void:
-	game_time_elapsed+=delta
+	if is_result_display:
+		return
+	
+	_update_stage_timer(delta)
 	_update_spawn_interval()
+	_update_hub()
+	_check_game_result()
 
+func _configure_result_dialog()->void:
+	result_dialog.process_mode=Node.PROCESS_MODE_ALWAYS
+	result_dialog.dialog_close_on_escape=false
+	result_dialog.ok_button_text=RESULT_OK_BUTTON_TEXT
+	result_dialog.hide()
+	if not result_dialog.confirmed.is_connected(_on_result_dialog_exit_requested):
+		result_dialog.confirmed.connect(_on_result_dialog_exit_requested)
+	if not result_dialog.close_requested.is_connected(_on_result_dialog_exit_requested):
+		result_dialog.close_requested.connect(_on_result_dialog_exit_requested)
+	if not result_dialog.canceled.is_connected(_on_result_dialog_exit_requested):
+		result_dialog.canceled.connect(_on_result_dialog_exit_requested)
 
+func _setup_hub()->void:
+	stage_time_left=maxf(stage_duration,0.0)
+	time_bar_full_scale_x=timer_bar.scale.x
+	if timer_bar.texture!=null:
+		time_bar_left_texture_width=timer_bar.texture.get_width()
+	if timer_bar.centered:
+		time_bar_left_edge_x=timer_bar.position.x-(time_bar_left_texture_width*time_bar_full_scale_x*0.5)
+	else:
+		time_bar_left_edge_x=timer_bar.position.x
+	_update_hub()
+
+func _update_stage_timer(delta:float)->void:
+	if stage_time_left<=0.0:
+		stage_time_left=0.0
+		return
+	stage_time_left=maxf(stage_time_left-delta,0.0)
+func _update_hub()->void:
+	_update_life_count_label()
+	_update_time_bar()
+func _update_life_count_label()->void:
+	life_count_label.text="x %d" %_get_player_current_health()
+
+func _update_time_bar()->void:
+	var fill_ratio:=0.0
+	if stage_duration>0.0:
+		fill_ratio=clampf(stage_time_left/stage_duration,0.0,1.0)
+	timer_bar.scale.x=time_bar_full_scale_x*fill_ratio
+	if not timer_bar.centered:
+		timer_bar.position.x=time_bar_left_edge_x
+		return
+	var current_width:=time_bar_left_texture_width*timer_bar.scale.x
+	timer_bar.position.x=time_bar_left_edge_x+(current_width*0.5)
+
+func _show_result_dialog(result_title:String,result_message:String)->void:
+	if is_result_display:
+		return
+	is_result_display=true
+	result_dialog.title=result_title
+	result_dialog.dialog_text=result_message
+	_stop_world()
+	result_dialog.popup_centered()
+	var ok_button:=result_dialog.get_ok_button()
+	if ok_button!=null:
+		ok_button.grab_focus()
+func _check_game_result()->void:
+	if stage_time_left<=0.0:
+		_show_result_dialog(RESULT_TITLE_WIN,RESULT_MESSAGE_WIN)
+		return
+	if _get_player_current_health()<=0:
+		_show_result_dialog(RESULT_TILTLE_LOSE,RESULT_MESSAGE_LOSE)
+func _stop_world()->void:
+	enemy_spawn_timer.stop()
+	Engine.time_scale=0.0
+	get_tree().paused=true
+func _on_result_dialog_exit_requested()->void:
+	get_tree().quit()
+	
+func _get_player_current_health()->int:
+	if not is_instance_valid(player):
+		return 0
+	return player.get_current_health()
 func _collect_enemy_spawn_points()->void:
 	enemy_spawn_points.clear()
 	for child in enemy_spawn_points_root.get_children():
@@ -88,10 +181,10 @@ func _update_spawn_interval()->void:
 func _get_current_spawn_interval()->float:
 	var start_interval:=maxf(spawn_interval,0.1)
 	var end_interval:=minf(maxf(min_spawn_interval,0.1),start_interval)
-	if spawn_acceleration_duration<+0.0:
+	if stage_duration<=0.0:
 		return end_interval
-	var difficulty_radio:=clampf(game_time_elapsed/spawn_acceleration_duration,0.0,1.0)
-	return lerpf(start_interval,end_interval,difficulty_radio)
+	var difficulty_ratio:=1.0-clampf(stage_time_left/stage_duration,0.0,1.0)
+	return lerpf(start_interval,end_interval,difficulty_ratio)
 		
 		
 		
